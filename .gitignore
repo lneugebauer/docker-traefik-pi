@@ -1,0 +1,11 @@
+.DS_Store
+.env
+
+appdata/adguardhome/*
+!appdata/adguardhome/.gitkeep
+appdata/homeassistant/*
+!appdata/homeassistant/.gitkeep
+appdata/paperless-ngx/*
+!appdata/paperless-ngx/.gitkeep
+appdata/stirling-pdf/*
+!appdata/stirling-pdf/.gitkeep

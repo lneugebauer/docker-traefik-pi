@@ -1,0 +1,186 @@
+networks:
+  proxy:
+
+services:
+  traefik:
+    image: traefik:3.2
+    command:
+      - --api=true
+      - --api.dashboard=true
+      - --entrypoints.http.address=:80
+      - --entrypoints.https.address=:443
+      - --providers.docker
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=proxy
+      - --metrics.prometheus=true
+    ports:
+      - 80:80
+      - 443:443
+    restart: unless-stopped
+    networks:
+      - proxy
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=http"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.rule=Host(`$TRAEFIK_DOMAIN`)"
+
+  adguardhome:
+    image: adguard/adguardhome
+    restart: unless-stopped
+    ports:
+      - 53:53/tcp
+      - 53:53/udp
+      - 67:67/udp
+      - 853:853/tcp
+      - 853:853/udp
+      - 5443:5443/tcp
+      - 5443:5443/udp
+      - 8853:8853/udp
+    networks:
+      - proxy
+    volumes:
+      - './appdata/adguardhome/work:/opt/adguardhome/work'
+      - './appdata/adguardhome/conf:/opt/adguardhome/conf'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adguardhome.rule=Host(`$ADGUARD_HOME_DOMAIN`)"
+      - "traefik.http.routers.adguardhome.service=adguardhome"
+      - "traefik.http.services.adguardhome.loadbalancer.server.port=80"
+
+  homeassistant:
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    volumes:
+      - ./appdata/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    restart: unless-stopped
+    #privileged: true
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homeassistant.entrypoints=http"
+      - "traefik.http.routers.homeassistant.rule=Host(`$HOMEASSISTANT_DOMAIN`)"
+      - "traefik.http.routers.homeassistant.service=homeassistant"
+      - "traefik.http.services.homeassistant.loadbalancer.server.port=8123"
+
+  mosquitto:
+    image: eclipse-mosquitto
+    restart: unless-stopped
+    ports:
+      - 1883:1883
+    volumes:
+      - ./appdata/mosquitto/config:/mosquitto/config
+    networks:
+      - proxy
+
+  paperless-ngx-redis:
+    image: docker.io/library/redis:7
+    restart: unless-stopped
+    volumes:
+      - ./appdata/paperless-ngx/broker:/data
+    networks:
+      - proxy
+
+  paperless-ngx-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./appdata/paperless-ngx/db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: $PAPERLESS_NGX_DB
+      POSTGRES_USER: $PAPERLESS_NGX_USER
+      POSTGRES_PASSWORD: $PAPERLESS_NGX_PASSWORD
+    networks:
+      - proxy
+
+  paperless-ngx:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    depends_on:
+      paperless-ngx-db:
+        condition: service_healthy
+      paperless-ngx-redis:
+        condition: service_started
+      gotenberg:
+        condition: service_started
+      tika:
+        condition: service_started
+    volumes:
+      - ./appdata/paperless-ngx/data:/usr/src/paperless/data
+      - ./appdata/paperless-ngx/media:/usr/src/paperless/media
+      - ./appdata/paperless-ngx/export:/usr/src/paperless/export
+      - ./appdata/paperless-ngx/consume:/usr/src/paperless/consume
+    environment:
+      PAPERLESS_REDIS: redis://paperless-ngx-redis:6379
+      PAPERLESS_URL: https://$PAPERLESS_NGX_DOMAIN
+      PAPERLESS_DBHOST: paperless-ngx-db
+      PAPERLESS_DBNAME: $PAPERLESS_NGX_DB
+      PAPERLESS_DBUSER: $PAPERLESS_NGX_USER
+      PAPERLESS_DBPASS: $PAPERLESS_NGX_PASSWORD
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      # host
+      - "traefik.http.routers.paperless-ngx.entrypoints=http"
+      - "traefik.http.routers.paperless-ngx.rule=Host(`$PAPERLESS_NGX_DOMAIN`)"
+      - "traefik.http.routers.paperless-ngx.service=paperless-ngx"
+      - "traefik.http.services.paperless-ngx.loadbalancer.server.port=8000"
+
+  gotenberg:
+    image: docker.io/gotenberg/gotenberg:8.7
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+    networks:
+      - proxy
+
+  tika:
+    image: ghcr.io/paperless-ngx/tika:latest
+    restart: unless-stopped
+    networks:
+      - proxy
+
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/info/status | grep -q 'UP' && curl -fL http://localhost:8080/ | grep -qv 'Please sign in'"]
+      interval: 5s
+      timeout: 10s
+      retries: 16
+    volumes:
+      - ./appdata/stirling-pdf/data:/usr/share/tessdata:rw
+      - ./appdata/stirling-pdf/config:/configs:rw
+    restart: on-failure:5
+    environment:
+      - SYSTEM_DEFAULTLOCALE=de-DE
+      - SYSTEM_ENABLEANALYTICS=false
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      # host
+      - "traefik.http.routers.stirling-pdf.entrypoints=http"
+      - "traefik.http.routers.stirling-pdf.rule=Host(`$STIRLING_PDF_DOMAIN`)"
+      - "traefik.http.routers.stirling-pdf.service=stirling-pdf"
+      - "traefik.http.services.stirling-pdf.loadbalancer.server.port=8080"
