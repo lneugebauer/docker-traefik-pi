@@ -5,7 +5,11 @@ appdata/adguardhome/*
 !appdata/adguardhome/.gitkeep
 appdata/homeassistant/*
 !appdata/homeassistant/.gitkeep
+appdata/mosquitto/*
+!appdata/mosquitto/.gitkeep
 appdata/paperless-ngx/*
 !appdata/paperless-ngx/.gitkeep
 appdata/stirling-pdf/*
 !appdata/stirling-pdf/.gitkeep
+appdata/traefik/*
+!appdata/traefik/.gitkeep
