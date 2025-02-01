@@ -27,7 +27,7 @@ services:
       - proxy
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/user/1000/docker.sock:/var/run/docker.sock:ro
       - ./appdata/traefik:/data/
     environment:
       HETZNER_API_KEY: $HETZNER_API_KEY
@@ -58,8 +58,8 @@ services:
     networks:
       - proxy
     volumes:
-      - './appdata/adguardhome/work:/opt/adguardhome/work'
-      - './appdata/adguardhome/conf:/opt/adguardhome/conf'
+      - ./appdata/adguardhome/work:/opt/adguardhome/work
+      - ./appdata/adguardhome/conf:/opt/adguardhome/conf
     labels:
       - traefik.enable=true
       - traefik.http.routers.adguardhome.entrypoints=https
