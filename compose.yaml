@@ -206,3 +206,19 @@ services:
       - traefik.http.routers.stirling-pdf.tls.certresolver=letsencrypt
       - traefik.http.routers.stirling-pdf.service=stirling-pdf
       - traefik.http.services.stirling-pdf.loadbalancer.server.port=8080
+
+  mqtt-influxdb-bridge:
+    image: ghcr.io/lneugebauer/mqtt-influxdb-bridge:latest
+    restart: unless-stopped
+    networks:
+      - proxy
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_CLIENT: $MQTT_CLIENT
+      MQTT_TOPIC: $MQTT_TOPIC
+      INFLUXDB_HOST: $INFLUXDB_HOST
+      INFLUXDB_PORT: $INFLUXDB_PORT
+      INFLUXDB_DATABASE: $INFLUXDB_DATABASE
+      INFLUXDB_ORGANIZATION: $INFLUXDB_ORGANIZATION
+      INFLUXDB_TOKEN: $INFLUXDB_TOKEN
+      INFLUXDB_MEASUREMENT: $INFLUXDB_MEASUREMENT
