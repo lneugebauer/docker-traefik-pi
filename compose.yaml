@@ -3,7 +3,7 @@ networks:
 
 services:
   traefik:
-    image: traefik:3.2
+    image: traefik:3.3
     command:
       - --api=true
       - --api.dashboard=true
@@ -17,7 +17,7 @@ services:
       #- --certificatesresolvers.letsencrypt.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory
       - --certificatesresolvers.letsencrypt.acme.storage=/data/acme.json
       - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=hetzner
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge.delaybeforecheck=0
+      - --certificatesresolvers.letsencrypt.acme.dnsChallenge.propagation.delayBeforeChecks=0
       - --metrics.prometheus=true
     ports:
       - 80:80
